@@ -1,8 +1,7 @@
 import os
-import streamlit as st
+import argparse
 from openai import OpenAI
-from mistralai import MistralClient
-from mistralai.models.chat_completion import ChatMessage # Assurez-vous que cette importation est correcte pour votre version
+from mistralai.client import Mistral
 from dotenv import load_dotenv
 
 # Charger les variables d'environnement du fichier .env
@@ -32,14 +31,13 @@ class SimpleAgent:
         elif self.provider == "mistral":
             if not MISTRAL_API_KEY:
                 raise ValueError("La clé API Mistral (MISTRAL_API_KEY) n'est pas configurée.")
-            self.client = MistralClient(api_key=MISTRAL_API_KEY)
+            # Initialisation du client Mistral avec la nouvelle syntaxe v1+
+            self.client = Mistral(api_key=MISTRAL_API_KEY)
         else:
             raise ValueError(f"Fournisseur de modèle non supporté : {self.provider}")
 
     def run(self, prompt: str, temperature: float = 0.7) -> str:
         """Exécute la tâche de l'agent en interrogeant le LLM configuré."""
-        # L'affichage est géré par le spinner dans la boucle principale
-
         messages = [
             {"role": "system", "content": self.role},
             {"role": "user", "content": prompt},
@@ -51,17 +49,15 @@ class SimpleAgent:
                 messages=messages,
                 temperature=temperature,
             )
-            result = response.choices[0].message.content
+            return response.choices[0].message.content
         else:  # Mistral
-            # Conversion du format des messages pour le client Mistral
-            mistral_messages = [ChatMessage(role=m["role"], content=m["content"]) for m in messages] # type: ignore
-            response = self.client.chat(
+            # Utilisation de la nouvelle méthode chat.complete de Mistral
+            response = self.client.chat.complete(
                 model=self.model,
-                messages=mistral_messages,
+                messages=messages,
                 temperature=temperature,
             )
-            result = response.choices[0].message.content
-        return result
+            return response.choices[0].message.content
 
 
 class MultiAgentSystem:
@@ -99,57 +95,47 @@ class MultiAgentSystem:
 
     def execute_workflow(self, topic: str):
         """Exécute la séquence de tâches : recherche puis rédaction."""
-        st.info(f"🚀 Démarrage du workflow pour le sujet : **{topic}**")
-        st.write(f"Provider utilisé : **{self.provider.capitalize()}**")
+        print(f"\n🚀 Démarrage du workflow pour le sujet : {topic}")
+        print(f"Provider utilisé : {self.provider.capitalize()}\n")
 
         # --- Étape 1: L'agent Chercheur collecte les faits ---
+        print(f"🤖 L'agent {self.researcher.name} collecte des informations...")
         research_prompt = f"Trouve les 3 faits les plus importants sur : {topic}"
-        with st.spinner(f"🤖 L'agent **{self.researcher.name}** collecte des informations..."):
-            research_result = self.researcher.run(research_prompt)
-        st.success(f"✅ Agent **{self.researcher.name}** a terminé.")
+        research_result = self.researcher.run(research_prompt)
+        print(f"✅ Agent {self.researcher.name} a terminé.\n")
 
-        st.subheader("📝 Faits collectés par le Chercheur")
-        st.markdown(research_result)
+        print("📝 Faits collectés par le Chercheur :")
+        print(research_result)
+        print("-" * 50)
 
         # --- Étape 2: L'agent Rédacteur écrit l'article ---
+        print(f"\n✍️ L'agent {self.writer.name} rédige le contenu...")
         writer_prompt = f"Rédige un court paragraphe basé sur les faits suivants :\n\n{research_result}"
-        with st.spinner(f"✍️ L'agent **{self.writer.name}** rédige le contenu..."):
-            final_article = self.writer.run(writer_prompt)
-        st.success(f"✅ Agent **{self.writer.name}** a terminé.")
+        final_article = self.writer.run(writer_prompt)
+        print(f"✅ Agent {self.writer.name} a terminé.\n")
 
-        st.subheader("✨ Article final")
-        st.markdown(final_article)
-        st.balloons()
+        print("✨ Article final :")
+        print(final_article)
+        print("\n" + "=" * 50 + "\n")
 
 
 def main():
-    """Point d'entrée principal du script."""
-    st.set_page_config(page_title="Démonstration Multi-Agents", layout="centered")
-    st.title("🤖 Démonstration d'un Système Multi-Agents")
+    """Point d'entrée principal du script en ligne de commande."""
+    parser = argparse.ArgumentParser(description="Démonstration d'un Système Multi-Agents en CLI")
+    
+    # Arguments que l'utilisateur peut passer en console
+    parser.add_argument("topic", type=str, nargs="?", default="L'histoire de la tour Eiffel", help="Le sujet de recherche de l'agent")
+    parser.add_argument("--provider", type=str, choices=["mistral", "openai"], default=DEFAULT_PROVIDER, help="Le fournisseur de modèle à utiliser")
 
-    st.sidebar.header("Configuration")
-    provider = st.sidebar.selectbox(
-        "Choisissez le fournisseur de modèle",
-        ("mistral", "openai"),
-        index=0 if DEFAULT_PROVIDER == "mistral" else 1,
-    )
+    args = parser.parse_args()
 
-    topic = st.text_input(
-        "Quel sujet voulez-vous explorer ?",
-        "L'histoire de la tour Eiffel"
-    )
-
-    if st.button("Lancer les agents !", type="primary"):
-        if topic:
-            try:
-                agent_system = MultiAgentSystem(provider=provider)
-                agent_system.execute_workflow(topic)
-            except ValueError as e:
-                st.error(f"Erreur de configuration : {e}")
-            except Exception as e:
-                st.error(f"Une erreur inattendue est survenue : {e}")
-        else:
-            st.warning("Veuillez entrer un sujet.")
+    try:
+        agent_system = MultiAgentSystem(provider=args.provider)
+        agent_system.execute_workflow(args.topic)
+    except ValueError as e:
+        print(f"\n❌ Erreur de configuration : {e}")
+    except Exception as e:
+        print(f"\n❌ Une erreur inattendue est survenue : {e}")
 
 
 if __name__ == "__main__":

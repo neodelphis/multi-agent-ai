@@ -1,4 +1,3 @@
 python-dotenv
 openai
-mistralai
-streamlit
+mistralai>=1.0.0
