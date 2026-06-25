@@ -1,0 +1,27 @@
+# Fichiers de configuration des environnements virtuels
+.venv/
+venv/
+ENV/
+
+# Fichiers de cache et de compilation Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+
+# Fichiers de configuration de l'IDE
+.idea/
+.vscode/
+
+# Fichiers sensibles
+# Ne jamais versionner les clés d'API ou les secrets
+.env
+
+# Fichiers système macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Trashes
